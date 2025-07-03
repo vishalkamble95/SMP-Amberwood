@@ -1,0 +1,132 @@
+name: Build Template 12
+
+on:
+  # push:
+  #   branches:
+  #     - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Deployment domain'
+        required: true
+        default: 'smp-amberwoodrahatani.com'
+      server_user:
+        description: 'Server SSH username'
+        required: true
+        default: 'q2g3j98i4rdo'
+      server_ip:
+        description: 'Server IP'
+        required: true
+        default: '184.168.112.42'
+      server_path:
+        description: 'Target directory on server'
+        required: true
+        default: '/home/q2g3j98i4rdo/TEST/'
+      server_pass:
+        description: 'Server SSH password'
+        required: true
+        default: 'kkK8!PSJRUgX'
+      ssh_port:
+        description: 'Server SSH Port'
+        required: true
+        default: '22'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: PROD
+    timeout-minutes: 3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Export Inputs to Variables
+        id: vars
+        run: |
+          # Export domain with fallback to default if not provided
+          if [ -z "${{ github.event.inputs.domain }}" ]; then
+            echo "domain=smp-amberwoodrahatani.com" >> $GITHUB_OUTPUT
+          else
+            echo "domain=${{ github.event.inputs.domain }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Export server user with fallback to default if not provided
+          if [ -z "${{ github.event.inputs.server_user }}" ]; then
+            echo "user=q2g3j98i4rdo" >> $GITHUB_OUTPUT
+          else
+            echo "user=${{ github.event.inputs.server_user }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Export server IP with fallback to default if not provided
+          if [ -z "${{ github.event.inputs.server_ip }}" ]; then
+            echo "ip=184.168.112.42" >> $GITHUB_OUTPUT
+          else
+            echo "ip=${{ github.event.inputs.server_ip }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Export server path with fallback to default if not provided
+          if [ -z "${{ github.event.inputs.server_path }}" ]; then
+            echo "path=/home/q2g3j98i4rdo/TEST/" >> $GITHUB_OUTPUT
+          else
+            echo "path=${{ github.event.inputs.server_path }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Export server password with fallback to default if not provided
+          if [ -z "${{ github.event.inputs.server_pass }}" ]; then
+            echo "pass=kkK8!PSJRUgX" >> $GITHUB_OUTPUT
+          else
+            echo "pass=${{ github.event.inputs.server_pass }}" >> $GITHUB_OUTPUT
+          fi
+
+          if [ -z "${{ github.event.inputs.ssh_port }}" ]; then
+            echo "port=22" >> $GITHUB_OUTPUT
+          else
+            echo "port=${{ github.event.inputs.ssh_port }}" >> $GITHUB_OUTPUT
+          fi
+
+      
+
+      - name: Trigger SEO Generator
+        run: curl https://${{ steps.vars.outputs.domain }}/seo-generator.php
+        continue-on-error: true
+
+      - name: Fetch seodata.json from server
+        run: curl -o public/seodata.json https://${{ steps.vars.outputs.domain }}/seodata.json
+        continue-on-error: true
+
+      - name: Fetch seodata.json from server
+        run: curl -o seodata.json https://${{ steps.vars.outputs.domain }}/seodata.json
+        continue-on-error: true
+
+      - name: Wait for SEO Generator to finish
+        run: sleep 10
+
+      - name: Build React app
+        env:
+          VITE_SLUG_URL: ${{ steps.vars.outputs.domain }}
+        run: npm run build
+
+      - name: Install sshpass
+        run: sudo apt-get install -y sshpass
+
+      - name: Upload dist folder to server via rsync with password
+        run: |
+          sshpass -p "${{ steps.vars.outputs.pass }}" rsync -avz -e "ssh -o StrictHostKeyChecking=no -p ${{ steps.vars.outputs.port }}"  ./dist/ ${{ steps.vars.outputs.user }}@${{ steps.vars.outputs.ip }}:${{ steps.vars.outputs.path }}
+
+      - name: Trigger Sitemap generator
+        run: curl https://${{ steps.vars.outputs.domain }}/sitemap-generator.php
+
+      - name: Trigger .htaccess generator
+        run: curl https://${{ steps.vars.outputs.domain }}/generate-htaccess.php
